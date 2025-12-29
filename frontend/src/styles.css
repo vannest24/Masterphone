@@ -5,27 +5,6 @@
     box-sizing: border-box;
 }
 
-/* Estilos generales del body */
-body {
-    font-family: "Kanit", sans-serif;
-    font-weight: 300;
-    color: #f4f4f4;
-    min-height: 100vh;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    background: url('/producto/rt5.jpg') no-repeat center center/cover;
-    padding: 20px;   
-}
-.titulo {
-    position: absolute; /* Permite un posicionamiento libre */
-    top: 10%; /* Ajusta hacia abajo o arriba */
-    left: 50%; /* Centra horizontalmente */
-    transform: translateX(-50%); /* Corrige el centrado exacto */
-    text-align: center; /* Asegura que el texto esté centrado */
-    font-size: 2.5rem; /* Ajusta el tamaño según sea necesario */
-}
-
 /* Estilos para la pantalla de login y registro */
 .wrapper {
     width: 360px;
@@ -83,15 +62,15 @@ input:focus, textarea:focus {
     outline: none;
 }
 
-button {
-    padding: 12px 25px;
+button:not(.auth-btn) {
+    padding: 10px;
     margin-top: 10px;
     font-size: 14px;
     letter-spacing: 1px;
     text-transform: uppercase;
     font-weight: 500;
     color: #fff;
-    background: linear-gradient(135deg, #1492d6, #0a74bd);
+    background: linear-gradient(135deg, #A89D8F, #8F9AA8);
     border: none;
     border-radius: 50px;
     box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.3);
@@ -99,13 +78,13 @@ button {
     transition: all 0.3s ease;
 }
 
-button:hover {
-    background: linear-gradient(135deg, #0a74bd, #1492d6);
-    box-shadow: 0px 15px 20px rgba(4, 167, 222, 0.4);
+button:not(.auth-btn):hover {
+    background: linear-gradient(135deg, #958774, #929574);
+    box-shadow: 0px 15px 20px #957774;
     transform: translateY(-5px);
 }
 
-button:active {
+button:not(.auth-btn):active {
     transform: scale(0.95);
 }
 
@@ -597,5 +576,3 @@ p {
     transform: scale(1.1);
     color: #000; /* Oscurecer el color al pasar el mouse */
 }
-
-

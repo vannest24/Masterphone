@@ -2,8 +2,6 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext"; // Asegúrate de que este hook esté definido correctamente
-import "../styles.css";
-import "../styles2.css"; // Asegúrate de que tu archivo CSS esté correctamente importado
 
 function HomeAdmin() {
     const [productos, setProductos] = useState([]);
@@ -109,4 +107,3 @@ function HomeAdmin() {
 }
 
 export default HomeAdmin;
-
