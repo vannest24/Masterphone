@@ -1,5 +1,5 @@
 const express = require("express");
-const conexion = require("../database");
+const supabase = require("../supabase");
 const { verificarToken } = require("../middlewares/authMiddleware");
 const router = express.Router();
 
@@ -10,23 +10,24 @@ router.post("/carrito", verificarToken, async (req, res) => {
 
     try {
         // Verificar si el producto ya está en el carrito
-        const [productoEnCarrito] = await conexion.query(
-            "SELECT * FROM carritos WHERE usuario_id = ? AND producto_id = ?",
-            [usuario_id, producto_id]
-        );
+        const { data: itemCarrito } = await supabase
+            .from('carts')
+            .select('*')
+            .eq('usuario_id', usuario_id)
+            .eq('producto_id', producto_id)
+            .single();
 
-        if (productoEnCarrito.length > 0) {
+        if (itemCarrito) {
             // Si el producto ya está en el carrito, actualizamos la cantidad
-            await conexion.query(
-                "UPDATE carritos SET cantidad = cantidad + ? WHERE usuario_id = ? AND producto_id = ?",
-                [cantidad, usuario_id, producto_id]
-            );
+            await supabase
+                .from('carts')
+                .update({ cantidad: itemCarrito.cantidad + parseInt(cantidad) })
+                .eq('id', itemCarrito.id);
         } else {
             // Si el producto no está, lo agregamos al carrito
-            await conexion.query(
-                "INSERT INTO carritos (usuario_id, producto_id, cantidad) VALUES (?, ?, ?)",
-                [usuario_id, producto_id, cantidad]
-            );
+            await supabase
+                .from('carts')
+                .insert([{ usuario_id, producto_id, cantidad }]);
         }
 
         res.json({ mensaje: "Producto agregado al carrito" });
@@ -41,12 +42,22 @@ router.get("/carrito", verificarToken, async (req, res) => {
     const usuario_id = req.usuario.id;
 
     try {
-        const [productosEnCarrito] = await conexion.query(
-            "SELECT productos.id, productos.nombre, productos.precio, carritos.cantidad FROM carritos INNER JOIN productos ON carritos.producto_id = productos.id WHERE carritos.usuario_id = ?",
-            [usuario_id]
-        );
+        // En Supabase usamos joins para traer datos relacionados
+        const { data: items, error } = await supabase
+            .from('carts')
+            .select('*, products(*)')
+            .eq('usuario_id', usuario_id);
+        
+        // Formateamos la respuesta para que coincida con lo que espera el frontend
+        const carrito = items.map(item => ({
+            id: item.products.id, // Supabase devuelve el objeto relacionado en la propiedad 'products'
+            nombre: item.products.nombre,
+            precio: item.products.precio,
+            cantidad: item.cantidad,
+            imagen: item.products.imagen
+        }));
 
-        res.json({ carrito: productosEnCarrito });
+        res.json({ carrito });
     } catch (error) {
         console.error(error);
         res.status(500).json({ mensaje: "Error al obtener el carrito" });
@@ -59,10 +70,10 @@ router.delete("/carrito/:producto_id", verificarToken, async (req, res) => {
     const usuario_id = req.usuario.id;
 
     try {
-        await conexion.query(
-            "DELETE FROM carritos WHERE usuario_id = ? AND producto_id = ?",
-            [usuario_id, producto_id]
-        );
+        await supabase
+            .from('carts')
+            .delete()
+            .match({ usuario_id, producto_id }); // match es útil para borrar por múltiples campos
         res.json({ mensaje: "Producto eliminado del carrito" });
     } catch (error) {
         console.error(error);
@@ -76,10 +87,10 @@ router.post("/pedido", verificarToken, async (req, res) => {
 
     try {
         // Obtener los productos del carrito del usuario
-        const [productos] = await conexion.query(
-            "SELECT carritos.producto_id, carritos.cantidad, productos.precio FROM carritos INNER JOIN productos ON carritos.producto_id = productos.id WHERE carritos.usuario_id = ?",
-            [usuario_id]
-        );
+        const { data: productos } = await supabase
+            .from('carts')
+            .select('*, products(*)')
+            .eq('usuario_id', usuario_id);
 
         if (productos.length === 0) {
             return res.status(400).json({ mensaje: "El carrito está vacío" });
@@ -88,30 +99,32 @@ router.post("/pedido", verificarToken, async (req, res) => {
         // Calcular total del pedido
         let total = 0;
         for (let item of productos) {
-            total += item.precio * item.cantidad;
+            total += item.products.precio * item.cantidad;
         }
 
-        // Insertar el pedido
-        const [pedidoResultado] = await conexion.query(
-            "INSERT INTO pedidos (usuario_id, total) VALUES (?, ?)",
-            [usuario_id, total]
-        );
-        const pedido_id = pedidoResultado.insertId;
+        // Crear el pedido
+        const { data: pedido, error: pedidoError } = await supabase
+            .from('orders')
+            .insert([{ usuario_id, total }])
+            .select()
+            .single();
 
-        // Insertar los detalles del pedido
-        for (let item of productos) {
-            const subtotal = item.cantidad * item.precio;
+        if (pedidoError) throw pedidoError;
 
-            await conexion.query(
-                "INSERT INTO pedido_detalles (pedido_id, producto_id, cantidad, subtotal) VALUES (?, ?, ?, ?)",
-                [pedido_id, item.producto_id, item.cantidad, subtotal]
-            );
-        }
+        // Insertar detalles del pedido
+        const detalles = productos.map(item => ({
+            pedido_id: pedido.id,
+            producto_id: item.products.id,
+            cantidad: item.cantidad,
+            subtotal: item.cantidad * item.products.precio
+        }));
+
+        await supabase.from('order_details').insert(detalles);
 
         // Eliminar productos del carrito después de hacer el pedido
-        await conexion.query("DELETE FROM carritos WHERE usuario_id = ?", [usuario_id]);
+        await supabase.from('carts').delete().eq('usuario_id', usuario_id);
 
-        res.json({ mensaje: "Pedido realizado", pedido_id });
+        res.json({ mensaje: "Pedido realizado", pedido_id: pedido.id });
     } catch (error) {
         console.error(error);
         res.status(500).json({ mensaje: "Error al procesar el pedido" });

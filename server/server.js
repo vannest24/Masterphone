@@ -25,7 +25,3 @@ const PORT = process.env.PORT || 3000; // Usar el puerto del archivo .env o el p
 app.listen(PORT, () => {
     console.log(`Servidor corriendo en http://localhost:${PORT}`); // Mensaje de confirmación
 });
-
-
-
-
