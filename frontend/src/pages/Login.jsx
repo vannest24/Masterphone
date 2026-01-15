@@ -1,12 +1,67 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 
 function Login() {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [showPassword, setShowPassword] = useState(false);
+    const [modal, setModal] = useState({ show: false, message: "", type: "" }); // Estado del modal
+    const [isBlocked, setIsBlocked] = useState(false); // Estado para bloquear el botón
+    const [countdown, setCountdown] = useState(0); // Cuenta regresiva visible
+    const [redirectPath, setRedirectPath] = useState(null); // Ruta a la que ir después del éxito
     const navigate = useNavigate();
+
+    // Función para cerrar el modal y redirigir
+    const closeModal = () => {
+        setModal({ ...modal, show: false });
+        if (modal.type === "success" && redirectPath) {
+            navigate(redirectPath);
+        }
+    };
+
+    // Cerrar modal automáticamente después de 3 segundos
+    useEffect(() => {
+        if (modal.show) {
+            const timer = setTimeout(() => {
+                closeModal();
+            }, 3000);
+            return () => clearTimeout(timer);
+        }
+    }, [modal.show]);
+
+    // Verificar localStorage al cargar para persistir el bloqueo
+    useEffect(() => {
+        const storedBlockUntil = localStorage.getItem("blockUntil");
+        if (storedBlockUntil) {
+            const remainingTime = parseInt(storedBlockUntil) - Date.now();
+            if (remainingTime > 0) {
+                setIsBlocked(true);
+                setCountdown(Math.ceil(remainingTime / 1000));
+            } else {
+                localStorage.removeItem("blockUntil");
+            }
+        }
+    }, []);
+
+    // Manejar la cuenta regresiva del bloqueo
+    useEffect(() => {
+        let timer;
+        if (isBlocked && countdown > 0) {
+            timer = setInterval(() => {
+                setCountdown((prev) => {
+                    if (prev <= 1) {
+                        setIsBlocked(false);
+                        localStorage.removeItem("blockUntil");
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+        return () => clearInterval(timer);
+    }, [isBlocked, countdown]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -23,16 +78,31 @@ function Login() {
             const role = decodedToken.rol; // Aquí obtienes el rol del usuario
 
             // Redirigir según el rol
-            if (role === "admin") {
-                navigate("/homeadmin"); // Si el rol es 'admin', redirigir a HomeAdmin
-            } else {
-                navigate("/home"); // Si el rol es de usuario, redirigir a Home normal
-            }
-
-            alert("Inicio de sesión exitoso.");
+            const targetPath = role === "admin" ? "/homeadmin" : "/home";
+            setRedirectPath(targetPath);
+            setModal({ show: true, message: "Inicio de sesión exitoso.", type: "success" });
         } catch (error) {
             const errorMessage = error.response?.data?.mensaje || "Error al iniciar sesión.";
-            alert(errorMessage);
+            setModal({ show: true, message: errorMessage, type: "error" });
+
+            // Si el error es 429 (Too Many Requests), bloqueamos el botón
+            if (error.response?.status === 429) {
+                setIsBlocked(true);
+
+                // Intentar leer el tiempo del mensaje para desbloquear automáticamente
+                // Mensajes esperados: "... en X segundos" o "... por X minutos"
+                const secondsMatch = errorMessage.match(/(\d+) segundos/);
+                const minutesMatch = errorMessage.match(/(\d+) minutos/);
+                
+                let timeoutMs = 0;
+                if (secondsMatch) timeoutMs = parseInt(secondsMatch[1]) * 1000;
+                else if (minutesMatch) timeoutMs = parseInt(minutesMatch[1]) * 60 * 1000;
+
+                if (timeoutMs > 0) {
+                    setCountdown(Math.ceil(timeoutMs / 1000));
+                    localStorage.setItem("blockUntil", (Date.now() + timeoutMs).toString());
+                }
+            }
         }
     };
 
@@ -44,7 +114,7 @@ function Login() {
             <div className="absolute top-[-10%] right-[-10%] w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-pulse"></div>
             <div className="absolute bottom-[-10%] left-[-10%] w-96 h-96 bg-purple-200 rounded-full mix-blend-multiply filter blur-3xl opacity-50 animate-pulse"></div>
 
-            <h1 className="absolute top-20 text-4xl font-bold text-black z-10 text-center">Bienvenido a MasterPhone</h1>
+            <h1 className="absolute top-20 text-4xl font-bold text-black z-10 text-center">Bienvenido a (Librería)</h1>
 
             <div className="relative w-full max-w-md">
                 {/* Borde animado con efecto de haz de luz (Conic Gradient) */}
@@ -84,33 +154,94 @@ function Login() {
                         type="email"
                         placeholder="Correo"
                         value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onChange={(e) => {
+                            setEmail(e.target.value);
+                            setIsBlocked(false); // Desbloquear si cambia el correo
+                            localStorage.removeItem("blockUntil");
+                        }}
                         required
                         className="w-full px-4 py-2 border border-[#011815] rounded-md focus:outline-none focus:ring-2 focus:ring-[#011815] bg-[#ECEC9C] !text-black placeholder:!text-gray-600"
                     />
-                    <input
-                        type="password"
-                        placeholder="Contraseña"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        required
-                        className="w-full px-4 py-2 border border-[#011815] rounded-md focus:outline-none focus:ring-2 focus:ring-[#011815] bg-[#ECEC9C] !text-black placeholder:!text-gray-600"
-                    />
+                    <div className="relative">
+                        <input
+                            type={showPassword ? "text" : "password"}
+                            placeholder="Contraseña"
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            required
+                            className="w-full px-4 py-2 border border-[#011815] rounded-md focus:outline-none focus:ring-2 focus:ring-[#011815] bg-[#ECEC9C] !text-black placeholder:!text-gray-600 pr-10"
+                        />
+                        <button
+                            type="button"
+                            onClick={() => setShowPassword(!showPassword)}
+                            className="absolute inset-y-0 right-0 px-3 flex items-center !text-black !bg-transparent hover:!bg-transparent border-none focus:outline-none"
+                        >
+                            {showPassword ? (
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+                                </svg>
+                            ) : (
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                            )}
+                        </button>
+                    </div>
                     <motion.button 
-                        whileHover={{ scale: 1.02 }}
-                        whileTap={{ scale: 0.95 }}
                         type="submit"
-                        className="w-full font-bold"
+                        disabled={isBlocked}
+                        className={`w-full !p-[10px] !mt-[10px] !text-[14px] !tracking-[1px] !uppercase !font-medium !text-white !border-none !rounded-[50px] !transition-all !duration-300 !ease-in-out ${
+                            isBlocked 
+                            ? "!bg-gray-500 !cursor-not-allowed !shadow-none" 
+                            : "!bg-gradient-to-br !from-[#A89D8F] !to-[#8F9AA8] !shadow-[0px_8px_15px_rgba(0,0,0,0.3)] !cursor-pointer hover:!bg-gradient-to-br hover:!from-[#958774] hover:!to-[#929574] hover:!shadow-[0px_15px_20px_#957774] hover:!-translate-y-[5px] active:!scale-95"
+                        }`}
                     >
-                        Iniciar Sesión
+                        {isBlocked ? `Bloqueado (${countdown}s)` : "Iniciar Sesión"}
                     </motion.button>
                 </form>
 
                 <div className="mt-6 text-center">
-                    <button onClick={() => navigate("/register")} className="w-full">Registrar</button>
+                    <button onClick={() => navigate("/register")} className="w-full !p-[10px] !mt-[10px] !text-[14px] !tracking-[1px] !uppercase !font-medium !text-white !bg-gradient-to-br !from-[#A89D8F] !to-[#8F9AA8] !border-none !rounded-[50px] !shadow-[0px_8px_15px_rgba(0,0,0,0.3)] !cursor-pointer !transition-all !duration-300 !ease-in-out hover:!bg-gradient-to-br hover:!from-[#958774] hover:!to-[#929574] hover:!shadow-[0px_15px_20px_#957774] hover:!-translate-y-[5px] active:!scale-95">Registrar</button>
                 </div>
                 </motion.div>
             </div>
+
+            {/* Modal Personalizado */}
+            <AnimatePresence>
+                {modal.show && (
+                    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.9 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.9 }}
+                            className="bg-white rounded-2xl shadow-2xl p-6 w-80 text-center border border-gray-200"
+                        >
+                            <div className={`mx-auto flex items-center justify-center h-16 w-16 rounded-full mb-4 ${modal.type === 'success' ? 'bg-green-100' : 'bg-red-100'}`}>
+                                {modal.type === 'success' ? (
+                                    <svg className="h-8 w-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7" />
+                                    </svg>
+                                ) : (
+                                    <svg className="h-8 w-8 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                )}
+                            </div>
+                            <h3 className={`text-xl font-bold mb-2 ${modal.type === 'success' ? 'text-green-800' : 'text-red-800'}`}>
+                                {modal.type === 'success' ? '¡Bienvenido!' : 'Error'}
+                            </h3>
+                            <p className="!text-black mb-6">{modal.message}</p>
+                            <button
+                                onClick={closeModal}
+                                className={`w-full py-2 px-4 rounded-full font-bold text-white transition-transform transform active:scale-95 ${modal.type === 'success' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+                            >
+                                Aceptar
+                            </button>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 }

@@ -62,7 +62,7 @@ input:focus, textarea:focus {
     outline: none;
 }
 
-button:not(.auth-btn) {
+/* button:not(.auth-btn) {
     padding: 10px;
     margin-top: 10px;
     font-size: 14px;
@@ -87,7 +87,7 @@ button:not(.auth-btn):hover {
 button:not(.auth-btn):active {
     transform: scale(0.95);
 }
-
+*/
 /* Estilos para el catálogo de productos */
 #productos {
     display: flex;
